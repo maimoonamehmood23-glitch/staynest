@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase, isConfigured } from './supabase.js';
-import { today, nights, quote, fromPrice, validateBooking } from './utils.js';
+import { today, nights, quote, fromPrice, validateBooking, validateSearch, searchHotels } from './utils.js';
 
 function HotelCard({ hotel, onView }) {
   return (
@@ -18,7 +18,7 @@ function HotelCard({ hotel, onView }) {
   );
 }
 
-function SearchBox({ search, setSearch, onSearch }) {
+function SearchBox({ search, setSearch, onSearch, errors }) {
   const set = k => e => setSearch({ ...search, [k]: e.target.value });
   return (
     <form className="search" onSubmit={e => { e.preventDefault(); onSearch(); }}>
@@ -27,6 +27,7 @@ function SearchBox({ search, setSearch, onSearch }) {
       <label>Check-out<input type="date" min={search.checkIn || today()} value={search.checkOut} onChange={set('checkOut')} /></label>
       <label>Guests<input type="number" min="1" max="10" value={search.guests} onChange={set('guests')} /></label>
       <button type="submit">Search</button>
+      {Object.values(errors).map(m => <p key={m} className="error banner" style={{ gridColumn: '1 / -1' }}>{m}</p>)}
     </form>
   );
 }
@@ -112,7 +113,8 @@ export default function App() {
   const detailNights = search.checkIn && search.checkOut > search.checkIn ? nights(search.checkIn, search.checkOut) : 1;
   const detailQuote = { nights: detailNights, ...quote(detailRoom, extras, choice, detailNights, Number(search.guests) || 1) };
   const go = v => { setView(v); window.scrollTo(0, 0); };
-  const results = hotels.filter(h => h.location.toLowerCase().includes(search.destination.trim().toLowerCase()) || h.name.toLowerCase().includes(search.destination.trim().toLowerCase()));
+  const searchErrors = validateSearch(search);
+  const results = searchHotels(hotels, search);
   const view1 = h => { setSelected(h); setChoice({ roomId: h.room_types[0]?.id, rooms: 1, extras: [] }); go('details'); };
   const list = (items) => items.length ? <div className="cards">{items.map(h => <HotelCard key={h.id} hotel={h} onView={view1} />)}</div> : <p className="panel">No hotels match your search.</p>;
 
@@ -127,10 +129,10 @@ export default function App() {
         {loadError && <p className="error banner">{loadError}</p>}
         {view === 'home' && <>
           <section className="hero"><h1>Find Your Perfect Stay</h1><p>Compare hotels, pick your dates and book in minutes.</p>
-            <SearchBox search={search} setSearch={setSearch} onSearch={() => go('hotels')} /></section>
+            <SearchBox search={search} setSearch={setSearch} errors={searchErrors} onSearch={() => Object.keys(searchErrors).length || go('hotels')} /></section>
           <section className="wrap"><h2>Featured Hotels</h2>{list(hotels.slice(0, 3))}</section>
         </>}
-        {view === 'hotels' && <section className="wrap"><SearchBox search={search} setSearch={setSearch} onSearch={() => {}} /><h2>{results.length} hotel(s) found</h2>{list(results)}</section>}
+        {view === 'hotels' && <section className="wrap"><SearchBox search={search} setSearch={setSearch} errors={searchErrors} onSearch={() => {}} /><h2>{results.length} hotel(s) found</h2>{list(results)}</section>}
         {view === 'details' && selected && <section className="wrap details">
           <img src={selected.image_url} alt={selected.name} />
           <div className="panel"><div className="row"><h1>{selected.name}</h1><span className="rating">★ {selected.rating}</span></div>

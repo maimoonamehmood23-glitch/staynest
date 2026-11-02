@@ -17,7 +17,7 @@ The form is validated, then the browser calls the `create_booking` Postgres func
 Connect the GitHub repo; build `npm run build`, publish `dist` (set in `netlify.toml`). Add the two `VITE_` variables in Site settings → Environment variables.
 
 ## Testing
-`npm test` runs Vitest unit tests (`src/utils.test.js`) for date handling, pricing, and booking validation (18 tests). The testable logic lives in `src/utils.js`.
+`npm test` runs Vitest unit tests (`src/utils.test.js`) for date handling, pricing, and booking validation (37 tests). The testable logic lives in `src/utils.js`.
 
 ## Custom AI skill: code-review
 `.claude/skills/code-review/SKILL.md` is a reusable Claude Code skill. It reviews a diff against an 8-point checklist (secrets, validation/SQL sync, error handling, edge cases, tests, data model, style, docs/commits) and always answers in the same table + verdict format. Use it by asking Claude Code: "review my changes with the code-review skill". Benefit: reviews are consistent between sessions and nothing on the checklist gets forgotten.
