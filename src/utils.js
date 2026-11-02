@@ -35,3 +35,33 @@ export function validateBooking(f, room, rooms) {
   else if (room && g > room.capacity * rooms) e.guests = `${room.name} x${rooms} sleeps up to ${room.capacity * rooms} guests.`;
   return e;
 }
+
+/** Lowercase, trim and drop accents so "Málaga" matches "malaga". */
+export const normalize = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+/** True when every word typed matches the hotel's name, location or description (empty search matches all). */
+export function matchesDestination(hotel, query) {
+  const words = normalize(query).split(/\s+/).filter(Boolean);
+  const text = normalize(`${hotel.name} ${hotel.location} ${hotel.description}`);
+  return words.every(w => text.includes(w));
+}
+
+/** True when one room type, at its available rooms, can sleep this many guests (same rule as create_booking). */
+export function canFitGuests(hotel, guests) {
+  const g = Number(guests);
+  if (!Number.isInteger(g) || g < 1) return true; // no usable guest count: do not hide anything
+  return (hotel.room_types || []).some(r => r.capacity * r.rooms_available >= g);
+}
+
+/** Returns an object of field -> error message for the search form (empty if valid). Dates are optional. */
+export function validateSearch(s) {
+  const e = {};
+  if (s.checkIn && s.checkIn < today()) e.checkIn = 'Check-in cannot be in the past.';
+  if (s.checkIn && s.checkOut && s.checkOut <= s.checkIn) e.checkOut = 'Check-out must be after check-in.';
+  const g = Number(s.guests);
+  if (!Number.isInteger(g) || g < 1) e.guests = 'Enter at least 1 guest.';
+  return e;
+}
+
+/** Hotels that match the destination words and can sleep the requested guests. */
+export const searchHotels = (hotels, s) => hotels.filter(h => matchesDestination(h, s.destination) && canFitGuests(h, s.guests));
