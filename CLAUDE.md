@@ -6,7 +6,7 @@
 React 18 + Vite, plain CSS, Supabase (Postgres + `@supabase/supabase-js`), Git/GitHub, Netlify.
 
 ## Structure
-- `src/main.jsx` entry · `src/App.jsx` views + components (`SearchBox`, `HotelCard`, `BookingForm`, `validateBooking`) · `src/supabase.js` client · `src/styles.css`
+- `src/main.jsx` entry · `src/App.jsx` views + components (`SearchBox`, `HotelCard`, `BookingForm`) · `src/utils.js` pure helpers (`today`, `nights`, `quote`, `fromPrice`, `validateBooking`) with tests in `src/utils.test.js` (`npm test`) · `src/supabase.js` client · `src/styles.css`
 - `supabase/schema.sql` tables, RLS, `create_booking` function, sample hotels
 - `netlify.toml` build + SPA redirect · `.env.example`
 
@@ -23,10 +23,13 @@ Form validation (client) → `supabase.rpc('create_booking')` → function re-ch
 `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `.env` (see `.env.example`). Only the anon key is used. RLS: hotels are publicly readable; users/bookings are writable only through the `security definer` function. Never use the service_role key in the frontend.
 
 ## Conventions & instructions for Claude Code
-Keep code beginner-friendly; no new dependencies without reason; never commit `.env`; update this file and `schema.sql` when changing the data model; keep validation in `validateBooking` and the SQL function in sync; log each meaningful change in README "Claude Code change log".
+Keep code beginner-friendly; no new dependencies without reason; never commit `.env`; update this file and `schema.sql` when changing the data model; keep validation in `validateBooking` (`src/utils.js`) and the SQL function in sync; log each meaningful change in README "Claude Code change log".
 
 ## Run locally
 `npm install`, copy `.env.example` to `.env`, run `supabase/schema.sql` in the Supabase SQL editor, `npm run dev`.
 
 ## Rooms, extras and pricing
 `room_types` (fixed price per room type) and `extras` (fixed add-on prices) are in `supabase/update_rooms_extras.sql`. Total = room price x nights x rooms + extras; the UI previews it and `create_booking` recomputes it server-side and stores `total_price`. Run schema.sql first, then update_rooms_extras.sql.
+
+## Skills
+`.claude/skills/code-review` - run it before every commit/merge. Commit messages must start with the Jira key (e.g. `KAN-5:`).
