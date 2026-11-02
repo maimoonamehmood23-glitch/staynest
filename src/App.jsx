@@ -1,34 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase, isConfigured } from './supabase.js';
-
-const today = () => new Date().toISOString().slice(0, 10);
-const nights = (a, b) => Math.max(1, Math.round((new Date(b) - new Date(a)) / 864e5));
-
-/** Live price: room price x nights x rooms, plus selected extras (server recomputes the same way). */
-function quote(room, extraList, choice, n, guests) {
-  if (!room) return { base: 0, lines: [], total: 0 };
-  const base = room.price_per_night * n * choice.rooms;
-  const lines = extraList.filter(e => choice.extras.includes(e.code)).map(e => ({ name: e.name,
-    cost: e.pricing === 'per_guest_night' ? e.price * guests * n : e.pricing === 'per_night' ? e.price * n * choice.rooms : Number(e.price) }));
-  return { base, lines, total: base + lines.reduce((t, l) => t + l.cost, 0) };
-}
-const fromPrice = h => Math.min(...h.room_types.map(r => r.price_per_night));
-
-/** Returns an object of field -> error message (empty if valid). */
-function validateBooking(f, room, rooms) {
-  const e = {};
-  if (!f.name.trim()) e.name = 'Full name is required.';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) e.email = 'Enter a valid email address.';
-  if (!/^[+\d][\d\s-]{6,}$/.test(f.phone)) e.phone = 'Enter a valid phone number.';
-  if (!f.checkIn) e.checkIn = 'Check-in date is required.';
-  else if (f.checkIn < today()) e.checkIn = 'Check-in cannot be in the past.';
-  if (!f.checkOut) e.checkOut = 'Check-out date is required.';
-  else if (f.checkIn && f.checkOut <= f.checkIn) e.checkOut = 'Check-out must be after check-in.';
-  const g = Number(f.guests);
-  if (!Number.isInteger(g) || g < 1) e.guests = 'Enter at least 1 guest.';
-  else if (room && g > room.capacity * rooms) e.guests = `${room.name} x${rooms} sleeps up to ${room.capacity * rooms} guests.`;
-  return e;
-}
+import { today, nights, quote, fromPrice, validateBooking } from './utils.js';
 
 function HotelCard({ hotel, onView }) {
   return (
@@ -39,7 +11,7 @@ function HotelCard({ hotel, onView }) {
         <p className="muted">📍 {hotel.location}</p>
         <p>{hotel.description}</p>
         <p className="tags">{hotel.facilities.map(x => <span key={x}>{x}</span>)}</p>
-        <div className="row"><strong><small>from </small>${fromPrice(hotel)}<small> / night</small></strong>
+        <div className="row"><strong>{fromPrice(hotel) === null ? <small>No rooms listed</small> : <><small>from </small>${fromPrice(hotel)}<small> / night</small></>}</strong>
           <button onClick={() => onView(hotel)}>View Details</button></div>
       </div>
     </article>
@@ -75,10 +47,13 @@ function BookingForm({ hotel, search, choice, extras, onDone, onChange }) {
     if (Object.keys(found).length) return;
     if (!isConfigured) return setSubmitError('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.');
     setBusy(true);
-    const { data, error } = await supabase.rpc('create_booking', {
-      p_name: f.name.trim(), p_email: f.email.trim(), p_phone: f.phone.trim(), p_hotel: hotel.id, p_room: room.id, p_rooms: choice.rooms, p_extras: choice.extras,
-      p_check_in: f.checkIn, p_check_out: f.checkOut, p_guests: Number(f.guests), p_request: f.request.trim(),
-    });
+    let data, error;
+    try {
+      ({ data, error } = await supabase.rpc('create_booking', {
+        p_name: f.name.trim(), p_email: f.email.trim(), p_phone: f.phone.trim(), p_hotel: hotel.id, p_room: room.id, p_rooms: choice.rooms, p_extras: choice.extras,
+        p_check_in: f.checkIn, p_check_out: f.checkOut, p_guests: Number(f.guests), p_request: f.request.trim(),
+      }));
+    } catch (err) { error = err; } // network failure: show a message instead of a stuck button
     setBusy(false);
     if (error || !data?.length) return setSubmitError(`Booking failed: ${error?.message || 'no response from database'}`);
     onDone({ id: data[0].booking_id, status: data[0].booking_status, total: data[0].total_price, room, rooms: choice.rooms, extraNames: extras.filter(e => choice.extras.includes(e.code)).map(e => e.name), name: f.name.trim(), hotel, checkIn: f.checkIn, checkOut: f.checkOut, guests: f.guests });
@@ -126,8 +101,11 @@ export default function App() {
       if (error) setLoadError(`Could not load hotels: ${error.message}`);
       else if (!data.length) setLoadError('No hotels in the database yet. Run supabase/update_rooms_extras.sql in the Supabase SQL Editor.');
       else setHotels(data.map(h => ({ ...h, room_types: [...h.room_types].sort((a, b) => a.price_per_night - b.price_per_night) })));
-    });
-    supabase.from('extras').select('*').order('price').then(({ data }) => setExtras(data || []));
+    }).catch(err => setLoadError(`Could not load hotels: ${err.message}`));
+    supabase.from('extras').select('*').order('price').then(({ data, error }) => {
+      if (error) setLoadError(`Could not load extras: ${error.message}`);
+      else setExtras(data || []);
+    }).catch(err => setLoadError(`Could not load extras: ${err.message}`));
   }, []);
 
   const detailRoom = selected?.room_types.find(r => r.id === choice.roomId);
