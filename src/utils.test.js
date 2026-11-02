@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { today, nights, quote, fromPrice, validateBooking } from './utils.js';
+import { today, nights, quote, fromPrice, validateBooking, normalize, matchesDestination, canFitGuests, validateSearch, searchHotels } from './utils.js';
 
 const room = { name: 'Deluxe', capacity: 2, price_per_night: 100 };
 const valid = { name: 'Ali', email: 'ali@example.com', phone: '+92 300 1234567', checkIn: '2999-01-10', checkOut: '2999-01-12', guests: 2 };
@@ -48,4 +48,49 @@ describe('validateBooking', () => {
   it('rejects zero guests', () => expect(validateBooking({ ...valid, guests: 0 }, room, 1).guests).toBeDefined());
   it('rejects more guests than the room sleeps', () => expect(validateBooking({ ...valid, guests: 3 }, room, 1).guests).toMatch(/sleeps up to 2/));
   it('scales capacity with the number of rooms', () => expect(validateBooking({ ...valid, guests: 4 }, room, 2)).toEqual({}));
+});
+
+const hotel = (name, location, rooms = [{ capacity: 2, rooms_available: 3 }], description = '') => ({ name, location, description, room_types: rooms });
+
+describe('normalize', () => {
+  it('lowercases, trims and drops accents', () => expect(normalize('  Málaga ')).toBe('malaga'));
+  it('handles null and undefined', () => expect(normalize(null)).toBe(''));
+});
+
+describe('matchesDestination', () => {
+  const h = hotel('Grand Plaza', 'Barcelona, Spain', undefined, 'Beach hotel');
+  it('matches everything when the search is empty', () => expect(matchesDestination(h, '   ')).toBe(true));
+  it('matches the location, ignoring case', () => expect(matchesDestination(h, 'barcelona')).toBe(true));
+  it('matches the name', () => expect(matchesDestination(h, 'plaza')).toBe(true));
+  it('matches several words in any order', () => expect(matchesDestination(h, 'spain barcelona')).toBe(true));
+  it('ignores accents', () => expect(matchesDestination(hotel('Sol', 'Málaga'), 'malaga')).toBe(true));
+  it('requires every word to match', () => expect(matchesDestination(h, 'barcelona paris')).toBe(false));
+});
+
+describe('canFitGuests', () => {
+  const h = hotel('A', 'B', [{ capacity: 2, rooms_available: 3 }, { capacity: 4, rooms_available: 1 }]);
+  it('fits guests up to capacity x rooms available', () => expect(canFitGuests(h, 6)).toBe(true));
+  it('rejects more guests than any room type can sleep', () => expect(canFitGuests(h, 7)).toBe(false));
+  it('does not hide hotels for an empty or invalid guest count', () => {
+    expect(canFitGuests(h, '')).toBe(true);
+    expect(canFitGuests(h, 0)).toBe(true);
+  });
+  it('rejects a hotel with no room types', () => expect(canFitGuests(hotel('A', 'B', []), 2)).toBe(false));
+});
+
+describe('validateSearch', () => {
+  it('accepts an empty-date search', () => expect(validateSearch({ checkIn: '', checkOut: '', guests: 2 })).toEqual({}));
+  it('accepts valid dates', () => expect(validateSearch({ checkIn: '2999-01-10', checkOut: '2999-01-12', guests: 1 })).toEqual({}));
+  it('rejects check-in in the past', () => expect(validateSearch({ checkIn: '2000-01-01', checkOut: '', guests: 2 }).checkIn).toBeDefined());
+  it('rejects check-out on or before check-in', () => expect(validateSearch({ checkIn: '2999-01-10', checkOut: '2999-01-10', guests: 2 }).checkOut).toBeDefined());
+  it('rejects zero or non-numeric guests', () => {
+    expect(validateSearch({ checkIn: '', checkOut: '', guests: 0 }).guests).toBeDefined();
+    expect(validateSearch({ checkIn: '', checkOut: '', guests: '' }).guests).toBeDefined();
+  });
+});
+
+describe('searchHotels', () => {
+  const list = [hotel('Big', 'Rome', [{ capacity: 4, rooms_available: 5 }]), hotel('Tiny', 'Rome', [{ capacity: 2, rooms_available: 1 }]), hotel('Far', 'Paris')];
+  it('filters by destination and guests together', () => expect(searchHotels(list, { destination: 'rome', guests: 5 }).map(h => h.name)).toEqual(['Big']));
+  it('returns all hotels for an empty destination and small party', () => expect(searchHotels(list, { destination: '', guests: 1 })).toHaveLength(3));
 });

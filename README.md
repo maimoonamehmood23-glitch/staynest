@@ -17,7 +17,7 @@ The form is validated, then the browser calls the `create_booking` Postgres func
 Connect the GitHub repo; build `npm run build`, publish `dist` (set in `netlify.toml`). Add the two `VITE_` variables in Site settings → Environment variables.
 
 ## Testing
-`npm test` runs Vitest unit tests (`src/utils.test.js`) for date handling, pricing, and booking validation (18 tests). The testable logic lives in `src/utils.js`.
+`npm test` runs Vitest unit tests (`src/utils.test.js`) for date handling, pricing, and booking validation (37 tests). The testable logic lives in `src/utils.js`.
 
 ## Custom AI skill: code-review
 `.claude/skills/code-review/SKILL.md` is a reusable Claude Code skill. It reviews a diff against an 8-point checklist (secrets, validation/SQL sync, error handling, edge cases, tests, data model, style, docs/commits) and always answers in the same table + verdict format. Use it by asking Claude Code: "review my changes with the code-review skill". Benefit: reviews are consistent between sessions and nothing on the checklist gets forgotten.
@@ -39,3 +39,4 @@ Limitations: MCP configuration lives in each developer's Claude config (not in t
 4. **Bug fixed - wrong "today" near midnight.** `today()` used `new Date().toISOString()`, which is UTC. In timezones ahead of UTC (e.g. Pakistan, UTC+5) between 00:00 and 05:00 it returned *yesterday*, so the date pickers allowed past dates and "check-in cannot be in the past" was wrong. Fix: build the date from local year/month/day (`src/utils.js`); regression test added.
 5. **Error handling:** extras and hotels fetches now report failures (and `.catch` network errors); booking submit catches thrown network errors so the button never gets stuck; a hotel with no room types shows "No rooms listed" instead of `$Infinity`.
 6. Moved pure logic to `src/utils.js` and added Vitest tests; added the `code-review` skill.
+7. **KAN-2 Hotel search:** search now hides hotels that cannot sleep the requested guests, validates dates and guest count, and matches every typed destination word (case/accent-insensitive) against name, location and description. Pure functions in `src/utils.js`, 19 new tests (37 total). Known limit: `rooms_available` is a static count, not checked against existing bookings for the chosen dates.
